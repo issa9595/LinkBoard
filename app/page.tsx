@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Plus, Layout } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useLocalStorage } from '@/hooks/useLocalStorage'
@@ -21,6 +21,16 @@ export default function HomePage() {
   const [categories, setCategories] = useLocalStorage<Category[]>('linkboard:categories', [])
   const [links, setLinks] = useLocalStorage<Link[]>('linkboard:links', [])
 
+  // Migration : assigner order si absent (données existantes sans order)
+  useEffect(() => {
+    if (categories.some(c => c.order === undefined)) {
+      setCategories(prev => prev.map((c, i) => ({ ...c, order: c.order ?? i })))
+    }
+    if (links.some(l => l.order === undefined)) {
+      setLinks(prev => prev.map((l, i) => ({ ...l, order: l.order ?? i })))
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // État des modales
   const [addLinkOpen, setAddLinkOpen] = useState(false)
   const [addCategoryOpen, setAddCategoryOpen] = useState(false)
@@ -31,9 +41,9 @@ export default function HomePage() {
   // --- Handlers catégories ---
 
   const handleAddCategory = useCallback((name: string, color: string) => {
-    const newCat: Category = { id: uid(), name, color, createdAt: Date.now() }
+    const newCat: Category = { id: uid(), name, color, createdAt: Date.now(), order: categories.length }
     setCategories((prev) => [...prev, newCat])
-  }, [setCategories])
+  }, [setCategories, categories.length])
 
   const handleEditCategory = useCallback((id: string, name: string, color: string) => {
     setCategories((prev) =>
@@ -52,9 +62,10 @@ export default function HomePage() {
   // --- Handlers liens ---
 
   const handleAddLink = useCallback((url: string, title: string, description: string, categoryId: string) => {
-    const newLink: Link = { id: uid(), url, title, description, categoryId, createdAt: Date.now() }
+    const linksInCat = links.filter(l => l.categoryId === categoryId).length
+    const newLink: Link = { id: uid(), url, title, description, categoryId, createdAt: Date.now(), order: linksInCat }
     setLinks((prev) => [...prev, newLink])
-  }, [setLinks])
+  }, [setLinks, links])
 
   const handleDeleteLink = useCallback((linkId: string) => {
     setLinks((prev) => prev.filter((l) => l.id !== linkId))
@@ -66,14 +77,20 @@ export default function HomePage() {
     setAddLinkOpen(true)
   }, [])
 
-  // Liens par catégorie
+  // Catégories triées par order
+  const sortedCategories = [...categories].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+
+  // Liens par catégorie, triés par order
   const linksByCategory = new Map<string, Link[]>()
-  for (const cat of categories) {
+  for (const cat of sortedCategories) {
     linksByCategory.set(cat.id, [])
   }
   for (const link of links) {
     const arr = linksByCategory.get(link.categoryId)
     if (arr) arr.push(link)
+  }
+  for (const arr of linksByCategory.values()) {
+    arr.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
   }
 
   return (
@@ -131,14 +148,14 @@ export default function HomePage() {
 
       {/* Corps principal */}
       <main className="flex-1 p-6">
-        {categories.length === 0 ? (
+        {sortedCategories.length === 0 ? (
           <EmptyState onCreateCategory={() => setAddCategoryOpen(true)} />
         ) : (
           <div
             className="grid gap-4"
             style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}
           >
-            {categories.map((cat, index) => (
+            {sortedCategories.map((cat, index) => (
               <CategoryColumn
                 key={cat.id}
                 category={cat}
