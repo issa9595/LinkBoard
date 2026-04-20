@@ -77,34 +77,39 @@ export function LinkItem({ link, categoryColor, onDelete }: LinkItemProps) {
       >
         <TooltipProvider delay={300}>
           <Tooltip>
-            <TooltipTrigger>
-              <a
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-1 rounded transition-colors block"
-                style={{ color: 'var(--color-text-secondary)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-blue-light)')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-secondary)')}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <ExternalLink size={14} />
-              </a>
+            <TooltipTrigger
+              render={
+                <a
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-1 rounded transition-colors block"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-blue-light)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-secondary)')}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              }
+            >
+              <ExternalLink size={14} />
             </TooltipTrigger>
             <TooltipContent>Ouvrir dans un nouvel onglet</TooltipContent>
           </Tooltip>
 
           <Tooltip>
-            <TooltipTrigger>
-              <button
-                className="p-1 rounded transition-colors"
-                style={{ color: 'var(--color-text-secondary)' }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-red)')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-secondary)')}
-                onClick={() => onDelete(link.id)}
-              >
-                <Trash2 size={14} />
-              </button>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  className="p-1 rounded transition-colors"
+                  style={{ color: 'var(--color-text-secondary)' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-red)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-text-secondary)')}
+                  onClick={() => onDelete(link.id)}
+                />
+              }
+            >
+              <Trash2 size={14} />
             </TooltipTrigger>
             <TooltipContent>Supprimer ce lien</TooltipContent>
           </Tooltip>
