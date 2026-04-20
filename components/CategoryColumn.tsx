@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { LinkItem } from '@/components/LinkItem'
 import type { Category, Link } from '@/lib/types'
@@ -65,16 +64,17 @@ export function CategoryColumn({
         <div className="relative shrink-0">
           <TooltipProvider delay={300}>
             <Tooltip>
-              <TooltipTrigger>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7"
-                  style={{ color: 'var(--color-text-secondary)' }}
-                  onClick={() => setMenuOpen((v) => !v)}
-                >
-                  <MoreHorizontal size={16} />
-                </Button>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-white/5"
+                    style={{ color: 'var(--color-text-secondary)' }}
+                    onClick={() => setMenuOpen((v) => !v)}
+                  />
+                }
+              >
+                <MoreHorizontal size={16} />
               </TooltipTrigger>
               <TooltipContent>Options</TooltipContent>
             </Tooltip>
