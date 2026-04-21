@@ -8,6 +8,7 @@ import { LinkItem } from '@/components/LinkItem'
 import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { useDroppable } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
+import { DND_ID } from '@/lib/utils'
 import type { Category, Link } from '@/lib/types'
 
 interface CategoryColumnProps {
@@ -31,7 +32,6 @@ export function CategoryColumn({
 }: CategoryColumnProps) {
   const [menuOpen, setMenuOpen] = useState(false)
 
-  // Sortable pour la colonne elle-même
   const {
     attributes,
     listeners,
@@ -39,10 +39,10 @@ export function CategoryColumn({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: `category-${category.id}` })
+  } = useSortable({ id: DND_ID.category(category.id) })
 
-  // Droppable pour la zone des liens (permet le drop sur colonne vide)
-  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `category-${category.id}` })
+  // shared id so a link dropped onto an empty column body still resolves to this category
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: DND_ID.category(category.id) })
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -63,7 +63,6 @@ export function CategoryColumn({
         minHeight: '200px',
       }}
     >
-      {/* Header de la colonne — drag handle */}
       <div
         className="flex items-center justify-between px-4 py-3 gap-2 cursor-grab active:cursor-grabbing"
         style={{ borderBottom: '1px solid var(--color-border)' }}
@@ -86,7 +85,6 @@ export function CategoryColumn({
           </span>
         </div>
 
-        {/* Menu contextuel — stopPropagation pour ne pas déclencher le drag */}
         <div className="relative shrink-0" onPointerDown={(e) => e.stopPropagation()}>
           <TooltipProvider delay={300}>
             <Tooltip>
@@ -144,9 +142,8 @@ export function CategoryColumn({
         </div>
       </div>
 
-      {/* Corps : liste des liens */}
       <SortableContext
-        items={(links ?? []).map(l => `link-${l.id}`)}
+        items={links.map(l => DND_ID.link(l.id))}
         strategy={verticalListSortingStrategy}
       >
         <div

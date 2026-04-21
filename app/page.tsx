@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { Plus, Layout } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useLocalStorage } from '@/hooks/useLocalStorage'
@@ -22,6 +22,7 @@ import {
   type DragEndEvent,
 } from '@dnd-kit/core'
 import { SortableContext, arrayMove, horizontalListSortingStrategy } from '@dnd-kit/sortable'
+import { DND_ID, parseDragId, byOrder } from '@/lib/utils'
 import type { Category, Link } from '@/lib/types'
 
 // Génère un identifiant unique simple
@@ -33,7 +34,7 @@ export default function HomePage() {
   const [categories, setCategories] = useLocalStorage<Category[]>('linkboard:categories', [])
   const [links, setLinks] = useLocalStorage<Link[]>('linkboard:links', [])
 
-  // Migration : assigner order si absent (données existantes sans order)
+  // One-time migration for existing data that predates the order field
   useEffect(() => {
     if (categories.some(c => c.order === undefined)) {
       setCategories(prev => prev.map((c, i) => ({ ...c, order: c.order ?? i })))
@@ -43,14 +44,11 @@ export default function HomePage() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // État des modales
   const [addLinkOpen, setAddLinkOpen] = useState(false)
   const [addCategoryOpen, setAddCategoryOpen] = useState(false)
   const [editCategory, setEditCategory] = useState<Category | null>(null)
   const [deleteCategory, setDeleteCategory] = useState<Category | null>(null)
   const [defaultCategoryId, setDefaultCategoryId] = useState<string | undefined>()
-
-  // DnD state
   const [activeDragId, setActiveDragId] = useState<string | null>(null)
 
   const sensors = useSensors(
@@ -60,9 +58,11 @@ export default function HomePage() {
   // --- Handlers catégories ---
 
   const handleAddCategory = useCallback((name: string, color: string) => {
-    const newCat: Category = { id: uid(), name, color, createdAt: Date.now(), order: categories.length }
-    setCategories((prev) => [...prev, newCat])
-  }, [setCategories, categories.length])
+    setCategories((prev) => [
+      ...prev,
+      { id: uid(), name, color, createdAt: Date.now(), order: prev.length },
+    ])
+  }, [setCategories])
 
   const handleEditCategory = useCallback((id: string, name: string, color: string) => {
     setCategories((prev) =>
@@ -81,16 +81,16 @@ export default function HomePage() {
   // --- Handlers liens ---
 
   const handleAddLink = useCallback((url: string, title: string, description: string, categoryId: string) => {
-    const linksInCat = links.filter(l => l.categoryId === categoryId).length
-    const newLink: Link = { id: uid(), url, title, description, categoryId, createdAt: Date.now(), order: linksInCat }
-    setLinks((prev) => [...prev, newLink])
-  }, [setLinks, links])
+    setLinks((prev) => {
+      const order = prev.filter(l => l.categoryId === categoryId).length
+      return [...prev, { id: uid(), url, title, description, categoryId, createdAt: Date.now(), order }]
+    })
+  }, [setLinks])
 
   const handleDeleteLink = useCallback((linkId: string) => {
     setLinks((prev) => prev.filter((l) => l.id !== linkId))
   }, [setLinks])
 
-  // Ouvre la modal d'ajout de lien pré-sélectionnée sur une catégorie
   const openAddLink = useCallback((categoryId?: string) => {
     setDefaultCategoryId(categoryId)
     setAddLinkOpen(true)
@@ -104,66 +104,57 @@ export default function HomePage() {
 
   function handleDragOver({ active, over }: DragOverEvent) {
     if (!over) return
-    const activeStr = active.id as string
-    const overStr = over.id as string
+    const activeParsed = parseDragId(active.id as string)
+    const overParsed = parseDragId(over.id as string)
 
-    if (!activeStr.startsWith('link-')) return
+    if (activeParsed.type !== 'link') return
 
-    const activeLinkId = activeStr.replace('link-', '')
-    const activeLink = links.find(l => l.id === activeLinkId)
-    if (!activeLink) return
+    setLinks(prev => {
+      const activeLink = prev.find(l => l.id === activeParsed.rawId)
+      if (!activeLink) return prev
 
-    let targetCatId: string | null = null
-    if (overStr.startsWith('category-')) {
-      targetCatId = overStr.replace('category-', '')
-    } else if (overStr.startsWith('link-')) {
-      const overLink = links.find(l => l.id === overStr.replace('link-', ''))
-      targetCatId = overLink?.categoryId ?? null
-    }
+      let targetCatId: string | null = null
+      if (overParsed.type === 'category') {
+        targetCatId = overParsed.rawId
+      } else if (overParsed.type === 'link') {
+        targetCatId = prev.find(l => l.id === overParsed.rawId)?.categoryId ?? null
+      }
 
-    if (!targetCatId || targetCatId === activeLink.categoryId) return
+      if (!targetCatId || targetCatId === activeLink.categoryId) return prev
 
-    const linksInTarget = links.filter(l => l.categoryId === targetCatId)
-    setLinks(prev =>
-      prev.map(l =>
-        l.id === activeLinkId ? { ...l, categoryId: targetCatId!, order: linksInTarget.length } : l
+      const order = prev.filter(l => l.categoryId === targetCatId).length
+      return prev.map(l =>
+        l.id === activeParsed.rawId ? { ...l, categoryId: targetCatId!, order } : l
       )
-    )
+    })
   }
 
   function handleDragEnd({ active, over }: DragEndEvent) {
     setActiveDragId(null)
     if (!over || active.id === over.id) return
 
-    const activeStr = active.id as string
-    const overStr = over.id as string
+    const activeParsed = parseDragId(active.id as string)
+    const overParsed = parseDragId(over.id as string)
 
-    // Réordonner les catégories
-    if (activeStr.startsWith('category-') && overStr.startsWith('category-')) {
-      const activeCatId = activeStr.replace('category-', '')
-      const overCatId = overStr.replace('category-', '')
+    if (activeParsed.type === 'category' && overParsed.type === 'category') {
       setCategories(prev => {
-        const sorted = [...prev].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-        const oldIndex = sorted.findIndex(c => c.id === activeCatId)
-        const newIndex = sorted.findIndex(c => c.id === overCatId)
+        const sorted = [...prev].sort(byOrder)
+        const oldIndex = sorted.findIndex(c => c.id === activeParsed.rawId)
+        const newIndex = sorted.findIndex(c => c.id === overParsed.rawId)
         if (oldIndex === -1 || newIndex === -1) return prev
         return arrayMove(sorted, oldIndex, newIndex).map((cat, i) => ({ ...cat, order: i }))
       })
       return
     }
 
-    // Réordonner les liens dans la même catégorie (onDragOver a déjà géré le cross-category)
-    if (activeStr.startsWith('link-') && overStr.startsWith('link-')) {
-      const activeLinkId = activeStr.replace('link-', '')
-      const overLinkId = overStr.replace('link-', '')
+    if (activeParsed.type === 'link' && overParsed.type === 'link') {
       setLinks(prev => {
-        const activeLink = prev.find(l => l.id === activeLinkId)
-        const overLink = prev.find(l => l.id === overLinkId)
+        const activeLink = prev.find(l => l.id === activeParsed.rawId)
+        const overLink = prev.find(l => l.id === overParsed.rawId)
         if (!activeLink || !overLink || activeLink.categoryId !== overLink.categoryId) return prev
-        const catLinks = [...prev.filter(l => l.categoryId === activeLink.categoryId)]
-          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-        const oldIndex = catLinks.findIndex(l => l.id === activeLinkId)
-        const newIndex = catLinks.findIndex(l => l.id === overLinkId)
+        const catLinks = [...prev.filter(l => l.categoryId === activeLink.categoryId)].sort(byOrder)
+        const oldIndex = catLinks.findIndex(l => l.id === activeParsed.rawId)
+        const newIndex = catLinks.findIndex(l => l.id === overParsed.rawId)
         if (oldIndex === -1 || newIndex === -1) return prev
         const reordered = arrayMove(catLinks, oldIndex, newIndex).map((l, i) => ({ ...l, order: i }))
         return prev.map(l => reordered.find(r => r.id === l.id) ?? l)
@@ -171,21 +162,26 @@ export default function HomePage() {
     }
   }
 
-  // Catégories triées par order
-  const sortedCategories = [...categories].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+  const sortedCategories = useMemo(
+    () => [...categories].sort(byOrder),
+    [categories]
+  )
 
-  // Liens par catégorie, triés par order
-  const linksByCategory = new Map<string, Link[]>()
-  for (const cat of sortedCategories) {
-    linksByCategory.set(cat.id, [])
-  }
-  for (const link of links) {
-    const arr = linksByCategory.get(link.categoryId)
-    if (arr) arr.push(link)
-  }
-  for (const arr of linksByCategory.values()) {
-    arr.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
-  }
+  const linksByCategory = useMemo(() => {
+    const map = new Map<string, Link[]>()
+    for (const cat of sortedCategories) map.set(cat.id, [])
+    for (const link of links) {
+      const arr = map.get(link.categoryId)
+      if (arr) arr.push(link)
+    }
+    for (const arr of map.values()) arr.sort(byOrder)
+    return map
+  }, [links, sortedCategories])
+
+  const activeDragParsed = useMemo(
+    () => (activeDragId ? parseDragId(activeDragId) : null),
+    [activeDragId]
+  )
 
   return (
     <div className="min-h-screen flex flex-col" style={{ backgroundColor: 'var(--color-bg)' }}>
@@ -253,7 +249,7 @@ export default function HomePage() {
             onDragEnd={handleDragEnd}
           >
             <SortableContext
-              items={sortedCategories.map(c => `category-${c.id}`)}
+              items={sortedCategories.map(c => DND_ID.category(c.id))}
               strategy={horizontalListSortingStrategy}
             >
               <div
@@ -276,8 +272,8 @@ export default function HomePage() {
             </SortableContext>
 
             <DragOverlay>
-              {activeDragId?.startsWith('category-') && (() => {
-                const cat = sortedCategories.find(c => `category-${c.id}` === activeDragId)
+              {activeDragParsed?.type === 'category' && (() => {
+                const cat = sortedCategories.find(c => c.id === activeDragParsed.rawId)
                 if (!cat) return null
                 return (
                   <div
@@ -298,8 +294,8 @@ export default function HomePage() {
                   </div>
                 )
               })()}
-              {activeDragId?.startsWith('link-') && (() => {
-                const link = links.find(l => `link-${l.id}` === activeDragId)
+              {activeDragParsed?.type === 'link' && (() => {
+                const link = links.find(l => l.id === activeDragParsed.rawId)
                 if (!link) return null
                 const cat = categories.find(c => c.id === link.categoryId)
                 return (

@@ -5,6 +5,7 @@ import { ExternalLink, Trash2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { DND_ID } from '@/lib/utils'
 import type { Link } from '@/lib/types'
 
 interface LinkItemProps {
@@ -13,7 +14,6 @@ interface LinkItemProps {
   onDelete: (id: string) => void
 }
 
-// Extrait le domaine d'une URL pour le favicon
 function getDomain(url: string): string {
   try {
     return new URL(url).hostname
@@ -32,7 +32,7 @@ export function LinkItem({ link, categoryColor, onDelete }: LinkItemProps) {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: `link-${link.id}` })
+  } = useSortable({ id: DND_ID.link(link.id) })
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -90,7 +90,6 @@ export function LinkItem({ link, categoryColor, onDelete }: LinkItemProps) {
         )}
       </div>
 
-      {/* Actions visibles au hover — stopPropagation pour ne pas déclencher le drag */}
       <div
         className="flex items-center gap-1 flex-shrink-0 transition-opacity duration-150"
         style={{ opacity: hovered ? 1 : 0 }}
