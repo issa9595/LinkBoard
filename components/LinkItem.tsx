@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { ExternalLink, Trash2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import type { Link } from '@/lib/types'
 
 interface LinkItemProps {
@@ -23,15 +25,33 @@ function getDomain(url: string): string {
 export function LinkItem({ link, categoryColor, onDelete }: LinkItemProps) {
   const [hovered, setHovered] = useState(false)
 
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: `link-${link.id}` })
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+    cursor: isDragging ? 'grabbing' : 'grab',
+    backgroundColor: hovered ? 'var(--color-surface)' : 'transparent',
+    borderLeft: `3px solid ${hovered ? categoryColor : 'transparent'}`,
+  }
+
   return (
     <div
+      ref={setNodeRef}
+      style={style}
       className="relative flex items-start gap-3 p-3 rounded-md transition-all duration-150"
-      style={{
-        backgroundColor: hovered ? 'var(--color-surface)' : 'transparent',
-        borderLeft: `3px solid ${hovered ? categoryColor : 'transparent'}`,
-      }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      {...attributes}
+      {...listeners}
     >
       {/* Favicon */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -70,10 +90,11 @@ export function LinkItem({ link, categoryColor, onDelete }: LinkItemProps) {
         )}
       </div>
 
-      {/* Actions visibles au hover */}
+      {/* Actions visibles au hover — stopPropagation pour ne pas déclencher le drag */}
       <div
         className="flex items-center gap-1 flex-shrink-0 transition-opacity duration-150"
         style={{ opacity: hovered ? 1 : 0 }}
+        onPointerDown={(e) => e.stopPropagation()}
       >
         <TooltipProvider delay={300}>
           <Tooltip>
