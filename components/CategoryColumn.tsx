@@ -5,6 +5,9 @@ import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { LinkItem } from '@/components/LinkItem'
+import { useSortable, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { useDroppable } from '@dnd-kit/core'
+import { CSS } from '@dnd-kit/utilities'
 import type { Category, Link } from '@/lib/types'
 
 interface CategoryColumnProps {
@@ -28,10 +31,31 @@ export function CategoryColumn({
 }: CategoryColumnProps) {
   const [menuOpen, setMenuOpen] = useState(false)
 
+  // Sortable pour la colonne elle-même
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setSortableRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: `category-${category.id}` })
+
+  // Droppable pour la zone des liens (permet le drop sur colonne vide)
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `category-${category.id}` })
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  }
+
   return (
     <div
+      ref={setSortableRef}
       className="column-enter flex flex-col rounded-lg overflow-hidden"
       style={{
+        ...style,
         animationDelay: `${animationDelay}ms`,
         backgroundColor: 'var(--color-surface-raised)',
         border: '1px solid var(--color-border)',
@@ -39,10 +63,12 @@ export function CategoryColumn({
         minHeight: '200px',
       }}
     >
-      {/* Header de la colonne */}
+      {/* Header de la colonne — drag handle */}
       <div
-        className="flex items-center justify-between px-4 py-3 gap-2"
+        className="flex items-center justify-between px-4 py-3 gap-2 cursor-grab active:cursor-grabbing"
         style={{ borderBottom: '1px solid var(--color-border)' }}
+        {...attributes}
+        {...listeners}
       >
         <div className="flex items-center gap-2 min-w-0">
           <Badge
@@ -60,8 +86,8 @@ export function CategoryColumn({
           </span>
         </div>
 
-        {/* Menu contextuel */}
-        <div className="relative shrink-0">
+        {/* Menu contextuel — stopPropagation pour ne pas déclencher le drag */}
+        <div className="relative shrink-0" onPointerDown={(e) => e.stopPropagation()}>
           <TooltipProvider delay={300}>
             <Tooltip>
               <TooltipTrigger
@@ -119,42 +145,56 @@ export function CategoryColumn({
       </div>
 
       {/* Corps : liste des liens */}
-      <div className="flex-1 flex flex-col p-2 gap-0.5">
-        {links.length === 0 ? (
-          <div className="flex flex-col items-center justify-center flex-1 py-6 gap-2">
-            <p
-              className="text-xs text-center"
-              style={{
-                color: 'var(--color-text-secondary)',
-                border: `1px dashed var(--color-border)`,
-                borderRadius: '6px',
-                padding: '12px 16px',
-                width: '100%',
-              }}
-            >
-              Aucun lien dans cette catégorie
-            </p>
-            <button
-              className="text-xs transition-colors"
-              style={{ color: 'var(--color-blue-light)' }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-blue)')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-blue-light)')}
-              onClick={() => onAddLink(category.id)}
-            >
-              + Ajouter un lien
-            </button>
-          </div>
-        ) : (
-          links.map((link) => (
-            <LinkItem
-              key={link.id}
-              link={link}
-              categoryColor={category.color}
-              onDelete={onDeleteLink}
-            />
-          ))
-        )}
-      </div>
+      <SortableContext
+        items={(links ?? []).map(l => `link-${l.id}`)}
+        strategy={verticalListSortingStrategy}
+      >
+        <div
+          ref={setDropRef}
+          className="flex-1 flex flex-col p-2 gap-0.5"
+          style={{
+            minHeight: '60px',
+            outline: isOver ? `2px dashed ${category.color}` : 'none',
+            borderRadius: '6px',
+            transition: 'outline 0.1s ease',
+          }}
+        >
+          {links.length === 0 ? (
+            <div className="flex flex-col items-center justify-center flex-1 py-6 gap-2">
+              <p
+                className="text-xs text-center"
+                style={{
+                  color: 'var(--color-text-secondary)',
+                  border: `1px dashed var(--color-border)`,
+                  borderRadius: '6px',
+                  padding: '12px 16px',
+                  width: '100%',
+                }}
+              >
+                Aucun lien dans cette catégorie
+              </p>
+              <button
+                className="text-xs transition-colors"
+                style={{ color: 'var(--color-blue-light)' }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-blue)')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--color-blue-light)')}
+                onClick={() => onAddLink(category.id)}
+              >
+                + Ajouter un lien
+              </button>
+            </div>
+          ) : (
+            links.map((link) => (
+              <LinkItem
+                key={link.id}
+                link={link}
+                categoryColor={category.color}
+                onDelete={onDeleteLink}
+              />
+            ))
+          )}
+        </div>
+      </SortableContext>
     </div>
   )
 }
